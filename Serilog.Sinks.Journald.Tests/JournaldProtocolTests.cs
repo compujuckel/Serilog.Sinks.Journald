@@ -237,14 +237,26 @@ public sealed class JournaldProtocolTests : IDisposable
     }
 
     [Fact]
-    public void OutputTemplateIsAppliedToMessageField()
+    public void ExceptionIsAppendedToMessageField()
     {
-        using var sink = CreateSink("[{Level}] {Message:lj}");
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+        var exception = new InvalidOperationException("boom");
+
+        logger.Information(exception, "Hello");
+
+        Assert.Equal($"Hello\n{exception}", GetSingleValue(ParseDatagram(Receive()), "MESSAGE"));
+    }
+
+    [Fact]
+    public void MessageIsWrittenWithoutExceptionWhenNoneIsPresent()
+    {
+        using var sink = CreateSink();
         var logger = CreateLogger(sink);
 
         logger.Information("Hello");
 
-        Assert.Equal("[Information] Hello", GetSingleValue(ParseDatagram(Receive()), "MESSAGE"));
+        Assert.Equal("Hello", GetSingleValue(ParseDatagram(Receive()), "MESSAGE"));
     }
 
     [Fact]
@@ -277,9 +289,9 @@ public sealed class JournaldProtocolTests : IDisposable
         Assert.Equal((byte)'\n', raw[^1]);
     }
 
-    private SerilogJournaldSink CreateSink(string? outputTemplate = null)
+    private SerilogJournaldSink CreateSink()
     {
-        return new SerilogJournaldSink(outputTemplate, null, _socketPath);
+        return new SerilogJournaldSink(_socketPath);
     }
 
     private static ILogger CreateLogger(ILogEventSink sink)

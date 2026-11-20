@@ -8,8 +8,6 @@ namespace Serilog.Sinks.Journald.Benchmarks;
 [MemoryDiagnoser]
 public class LogWritingBenchmarks
 {
-    private const string OutputTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}";
-
     private readonly string _socketPath = Path.Combine(Path.GetTempPath(), $"journald-bench-{Guid.NewGuid():N}.sock");
     private readonly string _filePath = Path.Combine(Path.GetTempPath(), $"file-bench-{Guid.NewGuid():N}.log");
     private volatile bool _draining;
@@ -17,10 +15,8 @@ public class LogWritingBenchmarks
     private Thread? _drainThread;
 
     private SerilogJournaldSink? _journaldSink;
-    private SerilogJournaldSink? _templatedSink;
     private ILogger _baselineLogger = null!;
     private ILogger _journaldLogger = null!;
-    private ILogger _templatedLogger = null!;
     private Logger _fileLogger = null!;
 
     [GlobalSetup]
@@ -34,8 +30,7 @@ public class LogWritingBenchmarks
         _drainThread = new Thread(() => Drain(_receiver)) { IsBackground = true };
         _drainThread.Start();
 
-        _journaldSink = new SerilogJournaldSink(null, null, _socketPath);
-        _templatedSink = new SerilogJournaldSink(OutputTemplate, null, _socketPath);
+        _journaldSink = new SerilogJournaldSink(_socketPath);
 
         _baselineLogger = new LoggerConfiguration()
             .MinimumLevel.Information()
@@ -45,11 +40,6 @@ public class LogWritingBenchmarks
         _journaldLogger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .WriteTo.Sink(_journaldSink)
-            .CreateLogger();
-
-        _templatedLogger = new LoggerConfiguration()
-            .MinimumLevel.Information()
-            .WriteTo.Sink(_templatedSink)
             .CreateLogger();
 
         _fileLogger = new LoggerConfiguration()
@@ -66,7 +56,6 @@ public class LogWritingBenchmarks
 
         _fileLogger?.Dispose();
         _journaldSink?.Dispose();
-        _templatedSink?.Dispose();
         _receiver?.Dispose();
         System.IO.File.Delete(_socketPath);
         System.IO.File.Delete(_filePath);
@@ -94,12 +83,6 @@ public class LogWritingBenchmarks
     public void JournaldMultilineMessage()
     {
         _journaldLogger.Information("Line one\nLine two\nLine three");
-    }
-
-    [Benchmark]
-    public void JournaldWithOutputTemplate()
-    {
-        _templatedLogger.Information("User {UserId} logged in from {Address} after {Attempts} attempts", 42, "10.0.0.1", 3);
     }
 
     [Benchmark]

@@ -1,12 +1,12 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
 using DotNext.Buffers;
 using DotNext.IO;
 using Serilog.Core;
 using Serilog.Events;
-using Serilog.Formatting.Display;
 
 
 namespace Serilog.Sinks.Journald;
@@ -18,24 +18,15 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
     private const int MaxStackPayloadLength = 512;
     private const int MaxStackCharLength = 128;
 
-    private readonly IFormatProvider? _formatProvider;
-    private readonly MessageTemplateTextFormatter? _formatter;
     private readonly Socket _socket;
 
-    public SerilogJournaldSink(string? outputTemplate, IFormatProvider? formatProvider)
-        : this(outputTemplate, formatProvider, JournalSocketPath)
+    public SerilogJournaldSink()
+        : this(JournalSocketPath)
     {
     }
 
-    internal SerilogJournaldSink(string? outputTemplate, IFormatProvider? formatProvider, string socketPath)
+    internal SerilogJournaldSink(string socketPath)
     {
-        _formatProvider = formatProvider;
-
-        if (outputTemplate != null)
-        {
-            _formatter = new MessageTemplateTextFormatter(outputTemplate, formatProvider);
-        }
-
         _socket = new Socket(AddressFamily.Unix, SocketType.Dgram, ProtocolType.Unspecified);
         var endpoint = new UnixDomainSocketEndPoint(socketPath);
         _socket.Connect(endpoint);
@@ -102,7 +93,7 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         return value switch
         {
             ScalarValue { Value: string text } => text,
-            ScalarValue { Value: IFormattable formattable } => formattable.ToString(null, _formatProvider),
+            ScalarValue { Value: IFormattable formattable } => formattable.ToString(null, CultureInfo.InvariantCulture),
             ScalarValue { Value: var other } => other?.ToString() ?? "null",
             _ => value.ToString()
         };
@@ -116,7 +107,7 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         {
             WriteText(buffer, name, text);
         }
-        else if (value is ScalarValue { Value: ISpanFormattable formattable } && formattable.TryFormat(chars, out var charsWritten, default, _formatProvider))
+        else if (value is ScalarValue { Value: ISpanFormattable formattable } && formattable.TryFormat(chars, out var charsWritten, default, CultureInfo.InvariantCulture))
         {
             WriteText(buffer, name, chars[..charsWritten]);
         }
@@ -174,15 +165,14 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         buffer.Write("MESSAGE\n\0\0\0\0\0\0\0\0"u8);
         var msgStartPos = buffer.WrittenCount;
 
-        using (var writer = TextWriter.Create(buffer, Encoding.UTF8, _formatProvider))
+        using (var writer = TextWriter.Create(buffer, Encoding.UTF8, CultureInfo.InvariantCulture))
         {
-            if (_formatter != null)
+            logEvent.RenderMessage(writer, CultureInfo.InvariantCulture);
+
+            if (logEvent.Exception is not null)
             {
-                _formatter.Format(logEvent, writer);
-            }
-            else
-            {
-                logEvent.RenderMessage(writer, _formatProvider);
+                writer.Write('\n');
+                writer.Write(logEvent.Exception.ToString());
             }
         }
 

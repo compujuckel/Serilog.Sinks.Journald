@@ -7,7 +7,7 @@ internal static class Program
         Console.WriteLine("Start");
 
         var log = new LoggerConfiguration()
-            .WriteTo.Journald(outputTemplate: "{Message:lj}{NewLine}{Exception}")
+            .WriteTo.Journald()
             .WriteTo.Console()
             .CreateLogger();
 

@@ -4,11 +4,8 @@ namespace Serilog.Sinks.Journald;
 
 public static class JournaldSinkExtensions
 {
-    public static LoggerConfiguration Journald(
-        this LoggerSinkConfiguration loggerConfiguration,
-        string? outputTemplate = null,
-        IFormatProvider? formatProvider = null)
+    public static LoggerConfiguration Journald(this LoggerSinkConfiguration loggerConfiguration)
     {
-        return loggerConfiguration.Sink(new SerilogJournaldSink(outputTemplate, formatProvider));
+        return loggerConfiguration.Sink(new SerilogJournaldSink());
     }
 }
