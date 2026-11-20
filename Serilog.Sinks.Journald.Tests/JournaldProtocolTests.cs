@@ -260,6 +260,28 @@ public sealed class JournaldProtocolTests : IDisposable
     }
 
     [Fact]
+    public void StringPropertyValuesInMessageAreNotQuoted()
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+
+        logger.Information("User {UserId} logged in from {Address} after {Attempts} attempts", 42, "10.0.0.1", 3);
+
+        Assert.Equal("User 42 logged in from 10.0.0.1 after 3 attempts", GetSingleValue(ParseDatagram(Receive()), "MESSAGE"));
+    }
+
+    [Fact]
+    public void NonStringPropertyValuesInMessageAreRenderedAsJson()
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+
+        logger.Information("Flags {Flags} enabled {Enabled}", new[] { "abc", "def" }, true);
+
+        Assert.Equal("Flags [\"abc\",\"def\"] enabled true", GetSingleValue(ParseDatagram(Receive()), "MESSAGE"));
+    }
+
+    [Fact]
     public void EachLogEventIsSentAsSeparateDatagram()
     {
         using var sink = CreateSink();
@@ -287,6 +309,145 @@ public sealed class JournaldProtocolTests : IDisposable
         var raw = Receive();
         Assert.Equal(Encoding.ASCII.GetBytes("PRIORITY=6\nMESSAGE\n"), raw.AsSpan(0, 19).ToArray());
         Assert.Equal((byte)'\n', raw[^1]);
+    }
+
+    [Fact]
+    public void LargeMessageIsSentIntact()
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+        var message = CreateMixedText(40_000);
+
+        logger.Information(message);
+
+        Assert.Equal(message, GetSingleValue(ParseDatagram(Receive()), "MESSAGE"));
+    }
+
+    [Fact]
+    public void SurrogatePairSplitAcrossEncoderChunksIsEncodedIntact()
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+        var message = string.Concat(Enumerable.Repeat(new string('a', 511) + "😀" + "b", 3));
+
+        logger.Information(message);
+
+        Assert.Equal(message, GetSingleValue(ParseDatagram(Receive()), "MESSAGE"));
+    }
+
+    [Fact]
+    public void LargePropertyValueWithoutNewlineIsSentIntact()
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+        var value = CreateMixedText(20_000).Replace('\n', ' ');
+
+        logger.ForContext("payload", value).Information("message");
+
+        var raw = Receive();
+        var field = GetSingleField(ParseDatagram(raw), "PAYLOAD");
+        Assert.False(field.Binary);
+        Assert.Equal(value, Encoding.UTF8.GetString(field.Value));
+    }
+
+    [Fact]
+    public void LargePropertyValueWithNewlinesIsSentIntact()
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+        var value = CreateMixedText(20_000);
+
+        logger.ForContext("payload", value).Information("message");
+
+        var raw = Receive();
+        var field = GetSingleField(ParseDatagram(raw), "PAYLOAD");
+        Assert.True(field.Binary);
+        Assert.Equal(value, Encoding.UTF8.GetString(field.Value));
+    }
+
+    [Theory]
+    [InlineData(511)]
+    [InlineData(512)]
+    [InlineData(513)]
+    [InlineData(1024)]
+    public void PropertyValuesAroundStackBufferSizeWithNewlineAreSentIntact(int byteLength)
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+        var value = new string('a', byteLength - 1) + "\n";
+
+        logger.ForContext("payload", value).Information("message");
+
+        var field = GetSingleField(ParseDatagram(Receive()), "PAYLOAD");
+        Assert.True(field.Binary);
+        Assert.Equal(byteLength, field.Value.Length);
+        Assert.Equal(value, Encoding.UTF8.GetString(field.Value));
+    }
+
+    [Theory]
+    [InlineData(63)]
+    [InlineData(64)]
+    [InlineData(65)]
+    [InlineData(1000)]
+    public void PropertyNamesLongerThanFieldLimitAreCappedAt64Characters(int nameLength)
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+        var expectedName = new string('A', Math.Min(nameLength, 64));
+
+        logger.ForContext(new string('a', nameLength), "value").Information("message");
+
+        var fields = ParseDatagram(Receive());
+        Assert.Equal("value", GetSingleValue(fields, expectedName));
+    }
+
+    [Fact]
+    public void PropertyNameTruncatedAfterNormalizationKeepsUnderscoreSeparators()
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+        var propertyName = string.Concat(Enumerable.Repeat("a-", 100));
+
+        logger.ForContext(propertyName, "value").Information("message");
+
+        var fields = ParseDatagram(Receive());
+        Assert.Equal("value", GetSingleValue(fields, string.Concat(Enumerable.Repeat("A_", 32))));
+    }
+
+    [Fact]
+    public void ManyLargePropertiesAreSentIntact()
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+        var value = new string('v', 200);
+        var contextLogger = logger;
+
+        for (var i = 0; i < 100; i++)
+        {
+            contextLogger = contextLogger.ForContext($"prop{i}", value);
+        }
+
+        contextLogger.Information("message");
+
+        var fields = ParseDatagram(Receive());
+        Assert.Equal(102, fields.Count);
+        for (var i = 0; i < 100; i++)
+        {
+            Assert.Equal(value, GetSingleValue(fields, $"PROP{i}"));
+        }
+    }
+
+    private static string CreateMixedText(int length)
+    {
+        const string pattern = "Zürich 😀 line\n";
+        var builder = new StringBuilder(length + pattern.Length);
+        while (builder.Length < length)
+        {
+            builder.Append(pattern);
+        }
+
+        var text = builder.ToString(0, length);
+        return char.IsHighSurrogate(text[^1]) ? text[..^1] : text;
     }
 
     private SerilogJournaldSink CreateSink()

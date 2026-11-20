@@ -7,6 +7,7 @@ internal static class Program
         Console.WriteLine("Start");
 
         var log = new LoggerConfiguration()
+            .MinimumLevel.Verbose()
             .WriteTo.Journald()
             .WriteTo.Console()
             .CreateLogger();
@@ -32,6 +33,9 @@ internal static class Program
         log.Information("Information");
         log.Warning("Warning");
         log.Error("Error");
+        
+        log.Debug("huh {List}", new List<string> { "abc", "def", "ghi" });
+        
         log.Fatal("Fatal");
 
         Console.WriteLine("End");

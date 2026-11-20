@@ -4,9 +4,9 @@ using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
 using DotNext.Buffers;
-using DotNext.IO;
 using Serilog.Core;
 using Serilog.Events;
+using Serilog.Formatting.Display;
 
 
 namespace Serilog.Sinks.Journald;
@@ -17,6 +17,11 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
     private const int MaxFieldNameLength = 64;
     private const int MaxStackPayloadLength = 512;
     private const int MaxStackCharLength = 128;
+
+    [ThreadStatic]
+    private static Utf8BufferTextWriter? _cachedWriter;
+
+    private static readonly MessageTemplateTextFormatter MessageFormatter = new("{Message:lj}", CultureInfo.InvariantCulture);
 
     private readonly Socket _socket;
 
@@ -157,7 +162,23 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
 
     public void Emit(LogEvent logEvent)
     {
-        using var buffer = new PoolingArrayBufferWriter<byte>(ArrayPool<byte>.Shared);
+        var writer = _cachedWriter ?? new Utf8BufferTextWriter(new PoolingArrayBufferWriter<byte>());
+        _cachedWriter = null;
+
+        try
+        {
+            EmitCore(writer, logEvent);
+        }
+        finally
+        {
+            writer.Reset();
+            _cachedWriter = writer;
+        }
+    }
+
+    private void EmitCore(Utf8BufferTextWriter writer, LogEvent logEvent)
+    {
+        var buffer = writer.Output;
 
         buffer.Write("PRIORITY="u8);
         buffer.Write([MapPriority(logEvent.Level)]);
@@ -165,16 +186,15 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         buffer.Write("MESSAGE\n\0\0\0\0\0\0\0\0"u8);
         var msgStartPos = buffer.WrittenCount;
 
-        using (var writer = TextWriter.Create(buffer, Encoding.UTF8, CultureInfo.InvariantCulture))
-        {
-            logEvent.RenderMessage(writer, CultureInfo.InvariantCulture);
+        MessageFormatter.Format(logEvent, writer);
 
-            if (logEvent.Exception is not null)
-            {
-                writer.Write('\n');
-                writer.Write(logEvent.Exception.ToString());
-            }
+        if (logEvent.Exception is not null)
+        {
+            writer.Write('\n');
+            writer.Write(logEvent.Exception.ToString());
         }
+
+        writer.Flush();
 
         var msgLength = buffer.WrittenCount - msgStartPos;
 
