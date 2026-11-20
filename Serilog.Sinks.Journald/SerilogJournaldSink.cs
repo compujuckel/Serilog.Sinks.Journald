@@ -16,7 +16,6 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
     private const string JournalSocketPath = "/run/systemd/journal/socket";
     private const int MaxFieldNameLength = 64;
     private const int MaxStackPayloadLength = 512;
-    private const int MaxStackCharLength = 128;
 
     [ThreadStatic]
     private static Utf8BufferTextWriter? _cachedWriter;
@@ -106,15 +105,15 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
 
     private void WriteField(PoolingArrayBufferWriter<byte> buffer, ReadOnlySpan<byte> name, LogEventPropertyValue value)
     {
-        Span<char> chars = stackalloc char[MaxStackCharLength];
+        Span<byte> utf8 = stackalloc byte[MaxStackPayloadLength];
 
         if (value is ScalarValue { Value: string text })
         {
             WriteText(buffer, name, text);
         }
-        else if (value is ScalarValue { Value: ISpanFormattable formattable } && formattable.TryFormat(chars, out var charsWritten, default, CultureInfo.InvariantCulture))
+        else if (value is ScalarValue { Value: IUtf8SpanFormattable formattable } && formattable.TryFormat(utf8, out var bytesWritten, default, CultureInfo.InvariantCulture))
         {
-            WriteText(buffer, name, chars[..charsWritten]);
+            WriteUtf8(buffer, name, utf8[..bytesWritten]);
         }
         else
         {
@@ -134,22 +133,7 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         try
         {
             Encoding.UTF8.GetBytes(text, payload);
-            buffer.Write(name);
-
-            if (text.Contains('\n'))
-            {
-                buffer.Write("\n"u8);
-                Span<byte> length = stackalloc byte[sizeof(ulong)];
-                BinaryPrimitives.WriteUInt64LittleEndian(length, (ulong)payload.Length);
-                buffer.Write(length);
-            }
-            else
-            {
-                buffer.Write("="u8);
-            }
-
-            buffer.Write(payload);
-            buffer.Write("\n"u8);
+            WriteUtf8(buffer, name, payload);
         }
         finally
         {
@@ -158,6 +142,26 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
                 ArrayPool<byte>.Shared.Return(rented);
             }
         }
+    }
+
+    private static void WriteUtf8(PoolingArrayBufferWriter<byte> buffer, ReadOnlySpan<byte> name, ReadOnlySpan<byte> payload)
+    {
+        buffer.Write(name);
+
+        if (payload.Contains((byte)'\n'))
+        {
+            buffer.Write("\n"u8);
+            Span<byte> length = stackalloc byte[sizeof(ulong)];
+            BinaryPrimitives.WriteUInt64LittleEndian(length, (ulong)payload.Length);
+            buffer.Write(length);
+        }
+        else
+        {
+            buffer.Write("="u8);
+        }
+
+        buffer.Write(payload);
+        buffer.Write("\n"u8);
     }
 
     public void Emit(LogEvent logEvent)
