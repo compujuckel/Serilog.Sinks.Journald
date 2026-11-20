@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Serilog.Sinks.Journald/Serilog.Sinks.Journald.csproj" />
+  <Project Path="Serilog.Sinks.Journald.Benchmarks/Serilog.Sinks.Journald.Benchmarks.csproj" />
+  <Project Path="Serilog.Sinks.Journald.Playground/Serilog.Sinks.Journald.Playground.csproj" />
+  <Project Path="Serilog.Sinks.Journald.Tests/Serilog.Sinks.Journald.Tests.csproj" />
+</Solution>

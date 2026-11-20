@@ -1,0 +1,117 @@
+using System.Net.Sockets;
+using BenchmarkDotNet.Attributes;
+using Serilog.Core;
+using Serilog.Events;
+
+namespace Serilog.Sinks.Journald.Benchmarks;
+
+[MemoryDiagnoser]
+public class LogWritingBenchmarks
+{
+    private const string OutputTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}";
+
+    private readonly string _socketPath = Path.Combine(Path.GetTempPath(), $"journald-bench-{Guid.NewGuid():N}.sock");
+    private volatile bool _draining;
+    private Socket? _receiver;
+    private Thread? _drainThread;
+
+    private SerilogJournaldSink? _journaldSink;
+    private SerilogJournaldSink? _templatedSink;
+    private ILogger _baselineLogger = null!;
+    private ILogger _journaldLogger = null!;
+    private ILogger _templatedLogger = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _receiver = new Socket(AddressFamily.Unix, SocketType.Dgram, ProtocolType.Unspecified);
+        _receiver.ReceiveTimeout = 100;
+        _receiver.Bind(new UnixDomainSocketEndPoint(_socketPath));
+
+        _draining = true;
+        _drainThread = new Thread(() => Drain(_receiver)) { IsBackground = true };
+        _drainThread.Start();
+
+        _journaldSink = new SerilogJournaldSink(null, null, _socketPath);
+        _templatedSink = new SerilogJournaldSink(OutputTemplate, null, _socketPath);
+
+        _baselineLogger = new LoggerConfiguration()
+            .MinimumLevel.Information()
+            .WriteTo.Sink(new NoOpSink())
+            .CreateLogger();
+
+        _journaldLogger = new LoggerConfiguration()
+            .MinimumLevel.Information()
+            .WriteTo.Sink(_journaldSink)
+            .CreateLogger();
+
+        _templatedLogger = new LoggerConfiguration()
+            .MinimumLevel.Information()
+            .WriteTo.Sink(_templatedSink)
+            .CreateLogger();
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        _draining = false;
+        _drainThread?.Join();
+
+        _journaldSink?.Dispose();
+        _templatedSink?.Dispose();
+        _receiver?.Dispose();
+        File.Delete(_socketPath);
+    }
+
+    [Benchmark(Baseline = true)]
+    public void LoggerPipelineWithNoOpSink()
+    {
+        _baselineLogger.Information("Hello, world");
+    }
+
+    [Benchmark]
+    public void JournaldSimpleMessage()
+    {
+        _journaldLogger.Information("Hello, world");
+    }
+
+    [Benchmark]
+    public void JournaldMessageWithProperties()
+    {
+        _journaldLogger.Information("User {UserId} logged in from {Address} after {Attempts} attempts", 42, "10.0.0.1", 3);
+    }
+
+    [Benchmark]
+    public void JournaldMultilineMessage()
+    {
+        _journaldLogger.Information("Line one\nLine two\nLine three");
+    }
+
+    [Benchmark]
+    public void JournaldWithOutputTemplate()
+    {
+        _templatedLogger.Information("User {UserId} logged in from {Address} after {Attempts} attempts", 42, "10.0.0.1", 3);
+    }
+
+    private void Drain(Socket receiver)
+    {
+        var buffer = new byte[64 * 1024];
+        while (_draining)
+        {
+            try
+            {
+                receiver.Receive(buffer);
+            }
+            catch (SocketException e) when (e.SocketErrorCode == SocketError.TimedOut)
+            {
+            }
+        }
+    }
+
+    private sealed class NoOpSink : ILogEventSink
+    {
+        public void Emit(LogEvent logEvent)
+        {
+        }
+    }
+}

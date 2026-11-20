@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="DotNext" Version="6.12.2" />
+      <PackageReference Include="DotNext.IO" Version="6.12.2" />
+      <PackageReference Include="Serilog" Version="4.4.0" />
+      <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <InternalsVisibleTo Include="Serilog.Sinks.Journald.Tests" />
+      <InternalsVisibleTo Include="Serilog.Sinks.Journald.Benchmarks" />
+    </ItemGroup>
+
+</Project>
