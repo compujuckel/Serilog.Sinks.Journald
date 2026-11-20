@@ -1,3 +1,11 @@
 using BenchmarkDotNet.Running;
 
-BenchmarkSwitcher.FromAssembly(typeof(Serilog.Sinks.Journald.Benchmarks.LogWritingBenchmarks).Assembly).Run(args);
+namespace Serilog.Sinks.Journald.Benchmarks;
+
+internal static class Program
+{
+    public static void Main(string[] args)
+    {
+        BenchmarkSwitcher.FromAssembly(typeof(LogWritingBenchmarks).Assembly).Run(args);
+    }
+}

@@ -11,6 +11,7 @@ public class LogWritingBenchmarks
     private const string OutputTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}";
 
     private readonly string _socketPath = Path.Combine(Path.GetTempPath(), $"journald-bench-{Guid.NewGuid():N}.sock");
+    private readonly string _filePath = Path.Combine(Path.GetTempPath(), $"file-bench-{Guid.NewGuid():N}.log");
     private volatile bool _draining;
     private Socket? _receiver;
     private Thread? _drainThread;
@@ -20,6 +21,7 @@ public class LogWritingBenchmarks
     private ILogger _baselineLogger = null!;
     private ILogger _journaldLogger = null!;
     private ILogger _templatedLogger = null!;
+    private Logger _fileLogger = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -49,6 +51,11 @@ public class LogWritingBenchmarks
             .MinimumLevel.Information()
             .WriteTo.Sink(_templatedSink)
             .CreateLogger();
+
+        _fileLogger = new LoggerConfiguration()
+            .MinimumLevel.Information()
+            .WriteTo.File(_filePath, fileSizeLimitBytes: null)
+            .CreateLogger();
     }
 
     [GlobalCleanup]
@@ -57,10 +64,12 @@ public class LogWritingBenchmarks
         _draining = false;
         _drainThread?.Join();
 
+        _fileLogger?.Dispose();
         _journaldSink?.Dispose();
         _templatedSink?.Dispose();
         _receiver?.Dispose();
-        File.Delete(_socketPath);
+        System.IO.File.Delete(_socketPath);
+        System.IO.File.Delete(_filePath);
     }
 
     [Benchmark(Baseline = true)]
@@ -91,6 +100,18 @@ public class LogWritingBenchmarks
     public void JournaldWithOutputTemplate()
     {
         _templatedLogger.Information("User {UserId} logged in from {Address} after {Attempts} attempts", 42, "10.0.0.1", 3);
+    }
+
+    [Benchmark]
+    public void FileSimpleMessage()
+    {
+        _fileLogger.Information("Hello, world");
+    }
+
+    [Benchmark]
+    public void FileMessageWithProperties()
+    {
+        _fileLogger.Information("User {UserId} logged in from {Address} after {Attempts} attempts", 42, "10.0.0.1", 3);
     }
 
     private void Drain(Socket receiver)

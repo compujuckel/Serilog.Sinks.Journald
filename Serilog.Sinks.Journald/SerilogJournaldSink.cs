@@ -15,7 +15,8 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
 {
     private const string JournalSocketPath = "/run/systemd/journal/socket";
     private const int MaxFieldNameLength = 64;
-    private static readonly HashSet<string> ReservedFieldNames = ["MESSAGE", "PRIORITY"];
+    private const int MaxStackPayloadLength = 512;
+    private const int MaxStackCharLength = 128;
 
     private readonly IFormatProvider? _formatProvider;
     private readonly MessageTemplateTextFormatter? _formatter;
@@ -54,38 +55,46 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         };
     }
 
-    private static string? ToFieldName(string propertyName)
+    private static int NormalizeFieldName(string propertyName, Span<byte> destination)
     {
-        var builder = new StringBuilder(propertyName.Length);
+        var length = 0;
         foreach (var c in propertyName)
         {
+            if (length == destination.Length)
+            {
+                break;
+            }
+
             if (char.IsAsciiLetterOrDigit(c))
             {
-                builder.Append(char.ToUpperInvariant(c));
+                destination[length++] = (byte)char.ToUpperInvariant(c);
             }
-            else if (builder.Length > 0 && builder[^1] != '_')
+            else if (length > 0 && destination[length - 1] != (byte)'_')
             {
-                builder.Append('_');
+                destination[length++] = (byte)'_';
             }
         }
 
-        if (builder.Length > 0 && builder[^1] == '_')
+        if (length == destination.Length)
         {
-            builder.Length--;
+            length = MaxFieldNameLength;
+        }
+        else if (length > 0 && destination[length - 1] == (byte)'_')
+        {
+            length--;
         }
 
-        if (builder.Length == 0 || char.IsAsciiDigit(builder[0]))
+        if (length == 0 || char.IsAsciiDigit((char)destination[0]))
         {
-            return null;
+            return 0;
         }
 
-        if (builder.Length > MaxFieldNameLength)
-        {
-            builder.Length = MaxFieldNameLength;
-        }
+        return length;
+    }
 
-        var fieldName = builder.ToString();
-        return ReservedFieldNames.Contains(fieldName) ? null : fieldName;
+    private static bool IsReservedFieldName(ReadOnlySpan<byte> name)
+    {
+        return name.SequenceEqual("MESSAGE"u8) || name.SequenceEqual("PRIORITY"u8);
     }
 
     private string RenderValue(LogEventPropertyValue value)
@@ -99,26 +108,60 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         };
     }
 
-    private void WriteField(PoolingArrayBufferWriter<byte> buffer, string name, LogEventPropertyValue value)
+    private void WriteField(PoolingArrayBufferWriter<byte> buffer, ReadOnlySpan<byte> name, LogEventPropertyValue value)
     {
-        var payload = Encoding.UTF8.GetBytes(RenderValue(value));
-        buffer.Write(Encoding.ASCII.GetBytes(name));
+        Span<char> chars = stackalloc char[MaxStackCharLength];
 
-        if (payload.AsSpan().Contains((byte)'\n'))
+        if (value is ScalarValue { Value: string text })
         {
-            buffer.Write("\n"u8);
-            Span<byte> length = stackalloc byte[sizeof(ulong)];
-            BinaryPrimitives.WriteUInt64LittleEndian(length, (ulong)payload.Length);
-            buffer.Write(length);
-            buffer.Write(payload);
+            WriteText(buffer, name, text);
+        }
+        else if (value is ScalarValue { Value: ISpanFormattable formattable } && formattable.TryFormat(chars, out var charsWritten, default, _formatProvider))
+        {
+            WriteText(buffer, name, chars[..charsWritten]);
         }
         else
         {
-            buffer.Write("="u8);
-            buffer.Write(payload);
+            var rendered = RenderValue(value);
+            WriteText(buffer, name, rendered);
+            GC.KeepAlive(rendered);
         }
+    }
 
-        buffer.Write("\n"u8);
+    private static void WriteText(PoolingArrayBufferWriter<byte> buffer, ReadOnlySpan<byte> name, ReadOnlySpan<char> text)
+    {
+        var byteCount = Encoding.UTF8.GetByteCount(text);
+        Span<byte> stackPayload = stackalloc byte[MaxStackPayloadLength];
+        var rented = byteCount > stackPayload.Length ? ArrayPool<byte>.Shared.Rent(byteCount) : null;
+        var payload = rented is null ? stackPayload[..byteCount] : rented.AsSpan(0, byteCount);
+
+        try
+        {
+            Encoding.UTF8.GetBytes(text, payload);
+            buffer.Write(name);
+
+            if (text.Contains('\n'))
+            {
+                buffer.Write("\n"u8);
+                Span<byte> length = stackalloc byte[sizeof(ulong)];
+                BinaryPrimitives.WriteUInt64LittleEndian(length, (ulong)payload.Length);
+                buffer.Write(length);
+            }
+            else
+            {
+                buffer.Write("="u8);
+            }
+
+            buffer.Write(payload);
+            buffer.Write("\n"u8);
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
     }
 
     public void Emit(LogEvent logEvent)
@@ -149,12 +192,14 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
 
         BinaryPrimitives.WriteUInt64LittleEndian(buffer.WrittenArray.AsSpan(msgStartPos - 8, 8), (ulong)msgLength);
 
+        Span<byte> fieldName = stackalloc byte[MaxFieldNameLength + 1];
         foreach (var property in logEvent.Properties)
         {
-            var fieldName = ToFieldName(property.Key);
-            if (fieldName is not null)
+            var length = NormalizeFieldName(property.Key, fieldName);
+            var name = fieldName[..length];
+            if (length > 0 && !IsReservedFieldName(name))
             {
-                WriteField(buffer, fieldName, property.Value);
+                WriteField(buffer, name, property.Value);
             }
         }
 
