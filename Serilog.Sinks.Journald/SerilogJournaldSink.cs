@@ -12,6 +12,9 @@ using Serilog.Formatting.Display;
 
 namespace Serilog.Sinks.Journald;
 
+/// <summary>
+/// A Serilog sink that writes log events to the systemd journal using the native journal protocol.
+/// </summary>
 public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
 {
     private const string JournalSocketPath = "/run/systemd/journal/socket";
@@ -25,6 +28,12 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
 
     private readonly Socket? _socket;
 
+    /// <summary>
+    /// Creates a sink that connects to the journald socket at <c>/run/systemd/journal/socket</c>.
+    /// </summary>
+    /// <remarks>
+    /// If the socket cannot be reached, the problem is reported through <see cref="SelfLog"/> and events are discarded.
+    /// </remarks>
     public SerilogJournaldSink()
         : this(JournalSocketPath)
     {
@@ -47,6 +56,10 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         }
     }
 
+    /// <summary>
+    /// Determines whether standard error is connected to the journal stream named by the <c>JOURNAL_STREAM</c> environment variable.
+    /// </summary>
+    /// <returns><see langword="true"/> if stderr is connected to the journal; otherwise, <see langword="false"/>.</returns>
     public static bool IsStderrConnectedToJournal()
     {
         return JournalStreamDetector.IsStderrConnectedToJournal();
@@ -214,6 +227,10 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         buffer.Write("\n"u8);
     }
 
+    /// <summary>
+    /// Sends a log event to the journal as a single datagram.
+    /// </summary>
+    /// <param name="logEvent">The log event to write.</param>
     public void Emit(LogEvent logEvent)
     {
         var socket = _socket;
@@ -288,6 +305,9 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         }
     }
 
+    /// <summary>
+    /// Closes the connection to the journald socket.
+    /// </summary>
     public void Dispose()
     {
         _socket?.Dispose();
