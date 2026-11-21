@@ -3,7 +3,6 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.Json;
 using DotNext.Buffers;
 using Serilog.Core;
 using Serilog.Debugging;
@@ -65,20 +64,26 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
     private static int NormalizeFieldName(string propertyName, Span<byte> destination)
     {
         var length = 0;
-        foreach (var c in JsonNamingPolicy.SnakeCaseUpper.ConvertName(propertyName))
+        for (var i = 0; i < propertyName.Length && length < destination.Length; i++)
         {
-            if (length == destination.Length)
-            {
-                break;
-            }
-
+            var c = propertyName[i];
             if (char.IsAsciiLetterOrDigit(c))
             {
+                if (IsWordBoundary(propertyName, i))
+                {
+                    length = AppendSeparator(destination, length);
+                }
+
+                if (length == destination.Length)
+                {
+                    break;
+                }
+
                 destination[length++] = (byte)char.ToUpperInvariant(c);
             }
-            else if (length > 0 && destination[length - 1] != (byte)'_')
+            else
             {
-                destination[length++] = (byte)'_';
+                length = AppendSeparator(destination, length);
             }
         }
 
@@ -94,6 +99,32 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         if (length == 0 || char.IsAsciiDigit((char)destination[0]))
         {
             return 0;
+        }
+
+        return length;
+    }
+
+    private static bool IsWordBoundary(string name, int index)
+    {
+        if (index == 0 || !char.IsUpper(name[index]))
+        {
+            return false;
+        }
+
+        var previous = name[index - 1];
+        if (char.IsLower(previous) || char.IsDigit(previous))
+        {
+            return true;
+        }
+
+        return char.IsUpper(previous) && index + 1 < name.Length && char.IsLower(name[index + 1]);
+    }
+
+    private static int AppendSeparator(Span<byte> destination, int length)
+    {
+        if (length > 0 && length < destination.Length && destination[length - 1] != (byte)'_')
+        {
+            destination[length++] = (byte)'_';
         }
 
         return length;
