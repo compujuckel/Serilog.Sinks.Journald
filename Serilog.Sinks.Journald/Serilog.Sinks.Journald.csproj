@@ -10,10 +10,18 @@
         <Authors>compujuckel</Authors>
         <Description>Serilog sink that writes log events to the systemd journal.</Description>
         <PackageTags>serilog;sink;journald;systemd;logging</PackageTags>
+        <Copyright>Copyright 2026 compujuckel</Copyright>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageProjectUrl>https://github.com/compujuckel/Serilog.Sinks.Journald</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/compujuckel/Serilog.Sinks.Journald.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <EnablePackageValidation>true</EnablePackageValidation>
     </PropertyGroup>
 
     <ItemGroup>
@@ -23,6 +31,7 @@
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       </PackageReference>
+      <PackageReference Include="Microsoft.SourceLink.GitHub" Version="11.0.100" PrivateAssets="All" />
       <PackageReference Include="Serilog" Version="4.4.0" />
     </ItemGroup>
 
