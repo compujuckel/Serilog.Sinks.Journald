@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6.1.0
+        with:
+          dotnet-version: 11.0.x
+
+      - name: Test
+        run: dotnet test Serilog.Sinks.Journald.Tests/Serilog.Sinks.Journald.Tests.csproj -c Release
+
+      - name: Pack
+        run: dotnet pack Serilog.Sinks.Journald/Serilog.Sinks.Journald.csproj -c Release -p:ContinuousIntegrationBuild=true -o artifacts
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4.2.2
+        with:
+          subject-path: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg
+
+      - name: NuGet login
+        id: login
+        uses: NuGet/login@v1.2.0
+        with:
+          user: compujuckel
+
+      - name: Push packages
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          flags=()
+          if [[ "$TAG" == *-* ]]; then
+            flags+=(--prerelease)
+          fi
+
+          gh release create "$TAG" artifacts/*.nupkg artifacts/*.snupkg \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --draft \
+            --generate-notes \
+            "${flags[@]}"
+
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
