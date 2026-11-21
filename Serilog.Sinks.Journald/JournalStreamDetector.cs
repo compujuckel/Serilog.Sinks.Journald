@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace Serilog.Sinks.Journald;
 
-public static partial class JournalStreamDetector
+internal static partial class JournalStreamDetector
 {
     private const int StandardErrorFileDescriptor = 2;
     private const string JournalStreamVariable = "JOURNAL_STREAM";

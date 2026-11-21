@@ -47,6 +47,11 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         }
     }
 
+    public static bool IsStderrConnectedToJournal()
+    {
+        return JournalStreamDetector.IsStderrConnectedToJournal();
+    }
+
     private static byte MapPriority(LogEventLevel level)
     {
         return level switch

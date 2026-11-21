@@ -5,6 +5,15 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <Version>1.0.0</Version>
+        <PackageId>compujuckel.Serilog.Sinks.Journald</PackageId>
+        <Authors>compujuckel</Authors>
+        <Description>Serilog sink that writes log events to the systemd journal.</Description>
+        <PackageTags>serilog;sink;journald;systemd;logging</PackageTags>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryType>git</RepositoryType>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
 
     <ItemGroup>
@@ -17,6 +26,10 @@
     <ItemGroup>
       <InternalsVisibleTo Include="Serilog.Sinks.Journald.Tests" />
       <InternalsVisibleTo Include="Serilog.Sinks.Journald.Benchmarks" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Include="README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
 
 </Project>
