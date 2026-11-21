@@ -6,6 +6,7 @@
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <MinVerMinimumMajorMinor>1.0</MinVerMinimumMajorMinor>
+        <MinVerTagPrefix>v</MinVerTagPrefix>
         <PackageId>compujuckel.Serilog.Sinks.Journald</PackageId>
         <Authors>compujuckel</Authors>
         <Description>Serilog sink that writes log events to the systemd journal.</Description>
