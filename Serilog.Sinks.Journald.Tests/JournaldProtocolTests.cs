@@ -143,6 +143,8 @@ public sealed class JournaldProtocolTests : IDisposable
 
     [Theory]
     [InlineData("answer", "ANSWER")]
+    [InlineData("ClientName", "CLIENT_NAME")]
+    [InlineData("HTTPServerName", "HTTP_SERVER_NAME")]
     [InlineData("user-id", "USER_ID")]
     [InlineData("user.name", "USER_NAME")]
     [InlineData("  spaced key ", "SPACED_KEY")]

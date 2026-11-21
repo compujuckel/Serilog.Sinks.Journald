@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 using DotNext.Buffers;
 using Serilog.Core;
 using Serilog.Debugging;
@@ -64,7 +65,7 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
     private static int NormalizeFieldName(string propertyName, Span<byte> destination)
     {
         var length = 0;
-        foreach (var c in propertyName)
+        foreach (var c in JsonNamingPolicy.SnakeCaseUpper.ConvertName(propertyName))
         {
             if (length == destination.Length)
             {
