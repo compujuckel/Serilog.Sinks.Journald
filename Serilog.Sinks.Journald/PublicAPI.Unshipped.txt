@@ -1,0 +1,7 @@
+﻿Serilog.Sinks.Journald.JournaldSinkExtensions
+Serilog.Sinks.Journald.SerilogJournaldSink
+Serilog.Sinks.Journald.SerilogJournaldSink.Dispose() -> void
+Serilog.Sinks.Journald.SerilogJournaldSink.Emit(Serilog.Events.LogEvent! logEvent) -> void
+Serilog.Sinks.Journald.SerilogJournaldSink.SerilogJournaldSink() -> void
+static Serilog.Sinks.Journald.JournaldSinkExtensions.Journald(this Serilog.Configuration.LoggerSinkConfiguration! loggerConfiguration) -> Serilog.LoggerConfiguration!
+static Serilog.Sinks.Journald.SerilogJournaldSink.IsStderrConnectedToJournal() -> bool

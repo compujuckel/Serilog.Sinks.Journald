@@ -143,7 +143,7 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
             || name.SequenceEqual("MESSAGE_TEMPLATE"u8);
     }
 
-    private string RenderValue(LogEventPropertyValue value)
+    private static string RenderValue(LogEventPropertyValue value)
     {
         return value switch
         {
@@ -154,7 +154,7 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         };
     }
 
-    private void WriteField(PoolingArrayBufferWriter<byte> buffer, ReadOnlySpan<byte> name, LogEventPropertyValue value)
+    private static void WriteField(PoolingArrayBufferWriter<byte> buffer, ReadOnlySpan<byte> name, LogEventPropertyValue value)
     {
         Span<byte> utf8 = stackalloc byte[MaxStackPayloadLength];
 
@@ -233,7 +233,7 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         }
     }
 
-    private void EmitCore(Utf8BufferTextWriter writer, LogEvent logEvent, Socket socket)
+    private static void EmitCore(Utf8BufferTextWriter writer, LogEvent logEvent, Socket socket)
     {
         var buffer = writer.Output;
 

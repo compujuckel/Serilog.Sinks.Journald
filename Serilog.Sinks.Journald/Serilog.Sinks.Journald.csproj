@@ -19,6 +19,10 @@
     <ItemGroup>
       <PackageReference Include="DotNext" Version="6.12.2" />
       <PackageReference Include="DotNext.IO" Version="6.12.2" />
+      <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0">
+        <PrivateAssets>all</PrivateAssets>
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      </PackageReference>
       <PackageReference Include="Serilog" Version="4.4.0" />
       <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     </ItemGroup>
@@ -30,6 +34,11 @@
 
     <ItemGroup>
       <None Include="README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+      <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
     </ItemGroup>
 
 </Project>
