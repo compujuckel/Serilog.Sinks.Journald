@@ -5,7 +5,6 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <MinVerMinimumMajorMinor>1.0</MinVerMinimumMajorMinor>
         <MinVerTagPrefix>v</MinVerTagPrefix>
         <PackageId>compujuckel.Serilog.Sinks.Journald</PackageId>
         <Authors>compujuckel</Authors>
@@ -23,6 +22,7 @@
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <EnablePackageValidation>true</EnablePackageValidation>
+        <PackageValidationBaselineVersion>1.0.1</PackageValidationBaselineVersion>
     </PropertyGroup>
 
     <ItemGroup>
