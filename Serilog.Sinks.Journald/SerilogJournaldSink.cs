@@ -172,9 +172,8 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
     private static void WriteText(PoolingArrayBufferWriter<byte> buffer, ReadOnlySpan<byte> name, ReadOnlySpan<char> text)
     {
         var byteCount = Encoding.UTF8.GetByteCount(text);
-        Span<byte> stackPayload = stackalloc byte[MaxStackPayloadLength];
-        var rented = byteCount > stackPayload.Length ? ArrayPool<byte>.Shared.Rent(byteCount) : null;
-        var payload = rented is null ? stackPayload[..byteCount] : rented.AsSpan(0, byteCount);
+        var rented = byteCount > MaxStackPayloadLength ? ArrayPool<byte>.Shared.Rent(byteCount) : null;
+        var payload = rented is null ? stackalloc byte[byteCount] : rented.AsSpan(0, byteCount);
 
         try
         {
