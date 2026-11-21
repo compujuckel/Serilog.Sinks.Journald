@@ -52,7 +52,7 @@ public sealed class JournaldProtocolTests : IDisposable
 
         var length = new byte[8];
         BinaryPrimitives.WriteUInt64LittleEndian(length, 5);
-        byte[] expected = [.. Encoding.ASCII.GetBytes("PRIORITY=6\nMESSAGE\n"), .. length, .. "Hello\n"u8.ToArray()];
+        byte[] expected = [.. Encoding.ASCII.GetBytes("PRIORITY=6\nMESSAGE\n"), .. length, .. "Hello\nMESSAGE_TEMPLATE=Hello\n"u8.ToArray()];
         Assert.Equal(expected, Receive());
     }
 
@@ -177,7 +177,7 @@ public sealed class JournaldProtocolTests : IDisposable
         logger.ForContext(propertyName, "value").Information("message");
 
         var fields = ParseDatagram(Receive());
-        Assert.Equal(new[] { "PRIORITY", "MESSAGE" }, fields.Select(f => f.Name).ToArray());
+        Assert.Equal(new[] { "PRIORITY", "MESSAGE", "MESSAGE_TEMPLATE" }, fields.Select(f => f.Name).ToArray());
     }
 
     [Fact]
@@ -230,12 +230,18 @@ public sealed class JournaldProtocolTests : IDisposable
         using var sink = CreateSink();
         var logger = CreateLogger(sink);
 
-        logger.ForContext("Message", "overridden").ForContext("priority", 1).Information("message");
+        logger
+            .ForContext("Message", "overridden")
+            .ForContext("priority", 1)
+            .ForContext("Exception", "overridden")
+            .ForContext("message_template", "overridden")
+            .Information("message");
 
         var fields = ParseDatagram(Receive());
-        Assert.Equal(new[] { "PRIORITY", "MESSAGE" }, fields.Select(f => f.Name).ToArray());
+        Assert.Equal(new[] { "PRIORITY", "MESSAGE", "MESSAGE_TEMPLATE" }, fields.Select(f => f.Name).ToArray());
         Assert.Equal("message", GetSingleValue(fields, "MESSAGE"));
         Assert.Equal("6", GetSingleValue(fields, "PRIORITY"));
+        Assert.Equal("message", GetSingleValue(fields, "MESSAGE_TEMPLATE"));
     }
 
     [Fact]
@@ -248,6 +254,42 @@ public sealed class JournaldProtocolTests : IDisposable
         logger.Information(exception, "Hello");
 
         Assert.Equal($"Hello\n{exception}", GetSingleValue(ParseDatagram(Receive()), "MESSAGE"));
+    }
+
+    [Fact]
+    public void ExceptionIsSentAsSeparateField()
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+        var exception = new InvalidOperationException("boom");
+
+        logger.Information(exception, "Hello");
+
+        Assert.Equal(exception.ToString(), GetSingleValue(ParseDatagram(Receive()), "EXCEPTION"));
+    }
+
+    [Fact]
+    public void ExceptionFieldIsNotSentWhenNoExceptionIsPresent()
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+
+        logger.Information("Hello");
+
+        Assert.DoesNotContain(ParseDatagram(Receive()), f => f.Name == "EXCEPTION");
+    }
+
+    [Fact]
+    public void MessageTemplateIsSentAsField()
+    {
+        using var sink = CreateSink();
+        var logger = CreateLogger(sink);
+
+        logger.Information("User {UserId} logged in", 42);
+
+        var fields = ParseDatagram(Receive());
+        Assert.Equal("User {UserId} logged in", GetSingleValue(fields, "MESSAGE_TEMPLATE"));
+        Assert.Equal("User 42 logged in", GetSingleValue(fields, "MESSAGE"));
     }
 
     [Fact]
@@ -432,7 +474,7 @@ public sealed class JournaldProtocolTests : IDisposable
         contextLogger.Information("message");
 
         var fields = ParseDatagram(Receive());
-        Assert.Equal(102, fields.Count);
+        Assert.Equal(103, fields.Count);
         for (var i = 0; i < 100; i++)
         {
             Assert.Equal(value, GetSingleValue(fields, $"PROP{i}"));
@@ -464,7 +506,7 @@ public sealed class JournaldProtocolTests : IDisposable
 
     private byte[] Receive()
     {
-        var buffer = new byte[64 * 1024];
+        var buffer = new byte[256 * 1024];
         var length = _server.Receive(buffer);
         return buffer.AsSpan(0, length).ToArray();
     }

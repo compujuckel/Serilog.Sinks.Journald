@@ -101,7 +101,10 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
 
     private static bool IsReservedFieldName(ReadOnlySpan<byte> name)
     {
-        return name.SequenceEqual("MESSAGE"u8) || name.SequenceEqual("PRIORITY"u8);
+        return name.SequenceEqual("MESSAGE"u8)
+            || name.SequenceEqual("PRIORITY"u8)
+            || name.SequenceEqual("EXCEPTION"u8)
+            || name.SequenceEqual("MESSAGE_TEMPLATE"u8);
     }
 
     private string RenderValue(LogEventPropertyValue value)
@@ -207,10 +210,11 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
 
         MessageFormatter.Format(logEvent, writer);
 
-        if (logEvent.Exception is not null)
+        var exception = logEvent.Exception?.ToString();
+        if (exception is not null)
         {
             writer.Write('\n');
-            writer.Write(logEvent.Exception.ToString());
+            writer.Write(exception);
         }
 
         writer.Flush();
@@ -220,6 +224,13 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         buffer.Write("\n"u8);
 
         BinaryPrimitives.WriteUInt64LittleEndian(buffer.WrittenArray.AsSpan(msgStartPos - 8, 8), (ulong)msgLength);
+        
+        if (exception is not null)
+        {
+            WriteText(buffer, "EXCEPTION"u8, exception);
+        }
+
+        WriteText(buffer, "MESSAGE_TEMPLATE"u8, logEvent.MessageTemplate.Text);
 
         Span<byte> fieldName = stackalloc byte[MaxFieldNameLength + 1];
         foreach (var property in logEvent.Properties)
