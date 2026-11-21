@@ -1,6 +1,16 @@
 # compujuckel.Serilog.Sinks.Journald
 
+[![NuGet](https://img.shields.io/nuget/v/compujuckel.Serilog.Sinks.Journald.svg)](https://www.nuget.org/packages/compujuckel.Serilog.Sinks.Journald/)
+
 A Serilog sink that writes log events directly to the systemd journal using its [native journal protocol](https://systemd.io/JOURNAL_NATIVE_PROTOCOL/).
+
+## Installation
+
+Install the package from [NuGet](https://www.nuget.org/packages/compujuckel.Serilog.Sinks.Journald/) with the .NET CLI:
+
+```shell
+dotnet add package compujuckel.Serilog.Sinks.Journald
+```
 
 ## Usage
 
@@ -25,14 +35,14 @@ Each log event becomes one journal entry:
 
 `PRIORITY` uses the syslog severity scale. The sink maps Serilog levels as follows:
 
-| Serilog level | `PRIORITY` | Syslog severity |
+| Serilog level | PRIORITY | Syslog severity |
 |---------------|------------|-----------------|
-| `Fatal`       | `2`        | crit            |
-| `Error`       | `3`        | err             |
-| `Warning`     | `4`        | warning         |
-| `Information` | `6`        | info            |
-| `Debug`       | `7`        | debug           |
-| `Verbose`     | `7`        | debug           |
+| Fatal       | 2        | crit            |
+| Error       | 3        | err             |
+| Warning     | 4        | warning         |
+| Information | 6        | info            |
+| Debug       | 7        | debug           |
+| Verbose     | 7        | debug           |
 
 ## Automatic protocol upgrading
 
