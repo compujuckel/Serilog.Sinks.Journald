@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
 
@@ -60,7 +61,7 @@ public static partial class JournalStreamDetector
 
         try
         {
-            if (NativeFstat(fileDescriptor, buffer) != 0)
+            if (fstat(fileDescriptor, buffer) != 0)
             {
                 return false;
             }
@@ -81,5 +82,6 @@ public static partial class JournalStreamDetector
     }
 
     [LibraryImport("libc", EntryPoint = "fstat", SetLastError = true)]
-    private static unsafe partial int NativeFstat(int fileDescriptor, byte* buffer);
+    [SuppressMessage("ReSharper", "InconsistentNaming")]
+    private static unsafe partial int fstat(int fileDescriptor, byte* buffer);
 }

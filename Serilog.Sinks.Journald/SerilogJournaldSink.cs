@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using DotNext.Buffers;
 using Serilog.Core;
+using Serilog.Debugging;
 using Serilog.Events;
 using Serilog.Formatting.Display;
 
@@ -22,7 +23,7 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
 
     private static readonly MessageTemplateTextFormatter MessageFormatter = new("{Message:lj}", CultureInfo.InvariantCulture);
 
-    private readonly Socket _socket;
+    private readonly Socket? _socket;
 
     public SerilogJournaldSink()
         : this(JournalSocketPath)
@@ -31,9 +32,19 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
 
     internal SerilogJournaldSink(string socketPath)
     {
-        _socket = new Socket(AddressFamily.Unix, SocketType.Dgram, ProtocolType.Unspecified);
-        var endpoint = new UnixDomainSocketEndPoint(socketPath);
-        _socket.Connect(endpoint);
+        var socket = new Socket(AddressFamily.Unix, SocketType.Dgram, ProtocolType.Unspecified);
+
+        try
+        {
+            var endpoint = new UnixDomainSocketEndPoint(socketPath);
+            socket.Connect(endpoint);
+            _socket = socket;
+        }
+        catch (Exception e)
+        {
+            SelfLog.WriteLine("Unable to connect to journald socket: {0}", e.Message);
+            socket.Dispose();
+        }
     }
 
     private static byte MapPriority(LogEventLevel level)
@@ -166,12 +177,15 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
 
     public void Emit(LogEvent logEvent)
     {
+        var socket = _socket;
+        if (socket is null) return;
+
         var writer = _cachedWriter ?? new Utf8BufferTextWriter(new PoolingArrayBufferWriter<byte>());
         _cachedWriter = null;
 
         try
         {
-            EmitCore(writer, logEvent);
+            EmitCore(writer, logEvent, socket);
         }
         finally
         {
@@ -180,7 +194,7 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
         }
     }
 
-    private void EmitCore(Utf8BufferTextWriter writer, LogEvent logEvent)
+    private void EmitCore(Utf8BufferTextWriter writer, LogEvent logEvent, Socket socket)
     {
         var buffer = writer.Output;
 
@@ -217,11 +231,18 @@ public sealed class SerilogJournaldSink : ILogEventSink, IDisposable
             }
         }
 
-        _socket.Send(buffer.WrittenMemory.Span);
+        try
+        {
+            socket.Send(buffer.WrittenMemory.Span);
+        }
+        catch (Exception e)
+        {
+            SelfLog.WriteLine("Unable to send log event to journald socket: {0}", e.Message);
+        }
     }
 
     public void Dispose()
     {
-        _socket.Dispose();
+        _socket?.Dispose();
     }
 }
